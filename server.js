@@ -1,6 +1,8 @@
 const express = require('express');
+require('dotenv').config();
+require('./Config/database')
 const app = express();
-
+const port  = process.env.PORT;
 
 
 
@@ -12,7 +14,7 @@ app.get("/test", (req,resp)=>{
 
 
 
-app.listen(8000, ()=>{
-    console.log("server started at port 8000");
+app.listen(port, ()=>{
+    console.log(`server started at port ${port}`);
     
 })
