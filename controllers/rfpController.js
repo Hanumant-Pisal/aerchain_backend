@@ -35,8 +35,24 @@ const createRfp = async (req, res, next) => {
     rfp.status = "Sent";
     await rfp.save();
     
-    await sendRfpEmailToVendors(rfp, vendors);
-    res.json({ message: "RFP sent", rfp });
+    // Try to send emails, but don't fail the entire operation if emails fail
+    let emailResults = { success: 0, failed: 0, total: vendors.length };
+    try {
+      emailResults = await sendRfpEmailToVendors(rfp, vendors);
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError);
+      // Continue with the operation even if emails fail
+    }
+    
+    res.json({ 
+      message: "RFP sent successfully", 
+      rfp,
+      emailResults: {
+        sent: emailResults.success,
+        failed: emailResults.failed,
+        total: emailResults.total
+      }
+    });
   } catch (err) { next(err); }
 };
 
