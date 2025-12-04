@@ -5,7 +5,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 const register = async (req, res, next) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, company, contact } = req.body;
     if (!email || !password)
       return res.status(400).json({ message: "email/password required" });
     const existing = await User.findOne({ email });
@@ -16,8 +16,21 @@ const register = async (req, res, next) => {
       name,
       email,
       password: hashed,
-      role: role,
+      role: role || "buyer",
     });
+    
+    // If registering as vendor, also create vendor record
+    if (role === "vendor" && company) {
+      const Vendor = require("../model/Vendor.model");
+      await Vendor.create({
+        name: company,
+        email,
+        contact: contact || "",
+        tags: [],
+        metadata: { userId: user._id }
+      });
+    }
+    
     const token = jwt.sign({ id: user._id, role: user.role }, JWT_SECRET, {
       expiresIn: "7d",
     });
