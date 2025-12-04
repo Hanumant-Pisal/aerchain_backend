@@ -24,6 +24,17 @@ const createRfp = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+ const getRfp = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const rfp = await Rfp.findById(id).populate("vendors", "name email contact");
+    if (!rfp) {
+      return res.status(404).json({ message: "RFP not found" });
+    }
+    res.json(rfp);
+  } catch (err) { next(err); }
+};
+
  const sendRfp = async (req, res, next) => {
   try {
     const { rfpId, vendorIds } = req.body;
@@ -56,4 +67,24 @@ const createRfp = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-module.exports = { createRfp, getRfps, sendRfp };
+const getVendorRfps = async (req, res, next) => {
+  try {
+    // Find the vendor record linked to this user
+    const Vendor = require("../model/Vendor.model");
+    const vendor = await Vendor.findOne({ "metadata.userId": req.user.id });
+    
+    if (!vendor) {
+      return res.status(404).json({ message: "Vendor profile not found" });
+    }
+
+    // Find RFPs that include this vendor in their vendors array
+    const rfps = await Rfp.find({ 
+      vendors: vendor._id,
+      status: "Sent" 
+    }).populate("vendors", "name email contact");
+    
+    res.json(rfps);
+  } catch (err) { next(err); }
+};
+
+module.exports = { createRfp, getRfps, getRfp, sendRfp, getVendorRfps };

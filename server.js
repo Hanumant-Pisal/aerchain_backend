@@ -7,6 +7,7 @@ const vendorRoutes = require("./routes/vendorRoutes")
 const rfpRoutes = require("./routes/rfpRoutes")
 const proposalRoutes = require("./routes/proposalRoutes")
 const errorMiddleware = require("./middlewares/errorMiddleware");
+const emailMonitor = require("./services/emailMonitorService");
 // const morgan = require("morgan");
 const app = express();
 const port = process.env.PORT;
@@ -27,6 +28,15 @@ app.get("/test", (req, resp) => {
 
 app.use(errorMiddleware);
 
-app.listen(port, () => {
+app.listen(port, async () => {
   console.log(`server started at port ${port}`);
+  
+  // Start email monitor after server starts
+  setTimeout(async () => {
+    try {
+      await emailMonitor.start();
+    } catch (error) {
+      console.error("Failed to start email monitor:", error);
+    }
+  }, 2000); // Wait 2 seconds for server to fully start
 });
