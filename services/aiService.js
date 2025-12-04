@@ -18,20 +18,34 @@ Return only JSON with keys:
   "items": [
     { "name": "...", "qty": number, "specs": "..." }
   ]
-}
-`;
+}`;
 
-  const resp = await openai.responses.create({
-    model: "gpt-4o",
-    input: prompt,
-  });
-
-  // The Responses API may return content in different formats; attempt safe parsing
   try {
-    const raw = resp.output?.[0]?.content?.[0]?.text ?? JSON.stringify(resp);
+    const resp = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that converts procurement requests into structured JSON." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+    });
+
+    let raw = resp.choices?.[0]?.message?.content || "{}";
+    
+    // Remove markdown code blocks if present
+    if (raw.includes('```json')) {
+      raw = raw.replace(/```json\s*/, '').replace(/```\s*$/, '');
+    } else if (raw.includes('```')) {
+      raw = raw.replace(/```\s*/, '').replace(/```\s*$/, '');
+    }
+    
+    // Clean up any extra whitespace
+    raw = raw.trim();
+    
     const json = JSON.parse(raw);
     return json;
   } catch (err) {
+    console.error("OpenAI API error:", err);
     // Fallback minimal parsing
     return { budget: null, deliveryDays: null, paymentTerms: null, warranty: null, items: [] };
   }
@@ -44,8 +58,7 @@ Return only JSON with keys:
  */
  const parseVendorResponse = async (rawEmailBody, attachments = [], rfpStructured = {}) => {
   let attachmentText = attachments.join("\n");
-  const prompt = `
-You are an assistant that extracts proposal information from vendor replies.
+  const prompt = `You are an assistant that extracts proposal information from vendor replies.
 RFP (context): ${JSON.stringify(rfpStructured)}
 Vendor reply:
 ${rawEmailBody}
@@ -63,18 +76,33 @@ Return JSON:
   "lineItems": [ { "name": "", "qty": number, "unitPrice": number } ],
   "completeness": 0-100,
   "summary": "short explanation"
-}
-`;
-
-  const resp = await openai.responses.create({
-    model: "gpt-4o",
-    input: prompt,
-  });
+}`;
 
   try {
-    const raw = resp.output?.[0]?.content?.[0]?.text ?? "{}";
+    const resp = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are a helpful assistant that extracts proposal information from vendor replies." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+    });
+
+    let raw = resp.choices?.[0]?.message?.content || "{}";
+    
+    // Remove markdown code blocks if present
+    if (raw.includes('```json')) {
+      raw = raw.replace(/```json\s*/, '').replace(/```\s*$/, '');
+    } else if (raw.includes('```')) {
+      raw = raw.replace(/```\s*/, '').replace(/```\s*$/, '');
+    }
+    
+    // Clean up any extra whitespace
+    raw = raw.trim();
+    
     return JSON.parse(raw);
   } catch (err) {
+    console.error("OpenAI API error:", err);
     return { totalPrice: null, currency: null, deliveryDays: null, warranty: null, paymentTerms: null, lineItems: [], completeness: 0, summary: "" };
   }
 };
