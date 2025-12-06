@@ -22,4 +22,12 @@ const Vendor = require("../model/Vendor.model");
   } catch (err) { next(err); }
 };
 
-module.exports = { addVendor, getVendors, getVendorById };
+const deleteVendor = async (req, res, next) => {
+  try {
+    const vendor = await Vendor.findByIdAndDelete(req.params.id);
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
+    res.json({ message: "Vendor deleted successfully" });
+  } catch (err) { next(err); }
+};
+
+module.exports = { addVendor, getVendors, getVendorById, deleteVendor };

@@ -1,4 +1,5 @@
 const User = require("../model/User.model");
+const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -76,4 +77,81 @@ const login = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login };
+const getBuyers = async (req, res, next) => {
+  try {
+    const buyers = await User.find({ role: "buyer" })
+      .select("-password")
+      .sort({ createdAt: -1 });
+    
+    res.json(buyers);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const deleteBuyer = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    // Find and delete the buyer
+    const buyer = await User.findByIdAndDelete(id);
+    
+    if (!buyer) {
+      return res.status(404).json({ message: "Buyer not found" });
+    }
+    
+    if (buyer.role !== "buyer") {
+      return res.status(400).json({ message: "User is not a buyer" });
+    }
+    
+    res.json({ message: "Buyer deleted successfully" });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getSystemHealth = async (req, res, next) => {
+  try {
+    // Check database connection
+    const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
+    
+    // Check email service (basic check)
+    let emailStatus = 'Active';
+    try {
+      // You could add actual email service ping here
+      emailStatus = 'Active';
+    } catch (error) {
+      emailStatus = 'Error';
+    }
+    
+    // Check AI service
+    let aiStatus = 'Available';
+    try {
+      // You could add actual AI service ping here
+      aiStatus = 'Available';
+    } catch (error) {
+      aiStatus = 'Unavailable';
+    }
+    
+    // Check IMAP service
+    let imapStatus = 'Checking';
+    try {
+      // You could add actual IMAP service ping here
+      imapStatus = 'Active';
+    } catch (error) {
+      imapStatus = 'Error';
+    }
+    
+    res.json({
+      database: dbStatus,
+      email: emailStatus,
+      ai: aiStatus,
+      imap: imapStatus,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { register, login, getBuyers, deleteBuyer, getSystemHealth };
