@@ -8,9 +8,9 @@ const lineItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const rfpSchema = new mongoose.Schema({
-  title: { type: String, required: true },
+  title: { type: String, required: true, index: true },
   description: String, // raw NL description
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
   structured: {
     budget: Number,
     deliveryDays: Number,
@@ -19,7 +19,10 @@ const rfpSchema = new mongoose.Schema({
     items: [lineItemSchema]
   },
   vendors: [{ type: mongoose.Schema.Types.ObjectId, ref: "Vendor" }],
-  status: { type: String, enum: ["Draft","Sent","Received","Awarded","Closed"], default: "Draft" }
+  status: { type: String, enum: ["Draft","Sent","Received","Awarded","Closed"], default: "Draft", index: true }
 }, { timestamps: true });
+
+rfpSchema.index({ createdBy: 1, status: 1 });
+rfpSchema.index({ status: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Rfp", rfpSchema);

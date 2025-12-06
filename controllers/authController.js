@@ -20,7 +20,6 @@ const register = async (req, res, next) => {
       role: role || "buyer",
     });
     
-    // If registering as vendor, also create vendor record
     if (role === "vendor" && company) {
       const Vendor = require("../model/Vendor.model");
       await Vendor.create({
@@ -93,7 +92,6 @@ const deleteBuyer = async (req, res, next) => {
   try {
     const { id } = req.params;
     
-    // Find and delete the buyer
     const buyer = await User.findByIdAndDelete(id);
     
     if (!buyer) {
@@ -112,31 +110,24 @@ const deleteBuyer = async (req, res, next) => {
 
 const getSystemHealth = async (req, res, next) => {
   try {
-    // Check database connection
     const dbStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
     
-    // Check email service (basic check)
     let emailStatus = 'Active';
     try {
-      // You could add actual email service ping here
       emailStatus = 'Active';
     } catch (error) {
       emailStatus = 'Error';
     }
     
-    // Check AI service
     let aiStatus = 'Available';
     try {
-      // You could add actual AI service ping here
       aiStatus = 'Available';
     } catch (error) {
       aiStatus = 'Unavailable';
     }
     
-    // Check IMAP service
     let imapStatus = 'Checking';
     try {
-      // You could add actual IMAP service ping here
       imapStatus = 'Active';
     } catch (error) {
       imapStatus = 'Error';

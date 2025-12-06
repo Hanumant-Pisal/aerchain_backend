@@ -17,17 +17,42 @@ const createRfp = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
- const getRfps = async (req, res, next) => {
+const getRfps = async (req, res, next) => {
   try {
-    const rfps = await Rfp.find()
-      .populate("vendors")
-      .sort({ createdAt: -1 })
-      .limit(200);
-    res.json(rfps);
+    const { page = 1, limit = 20, status, search } = req.query;
+    const skip = (page - 1) * limit;
+    
+    const filter = {};
+    if (status) filter.status = status;
+    if (search) {
+      filter.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    const [rfps, total] = await Promise.all([
+      Rfp.find(filter)
+        .populate("vendors", "name email contact")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      Rfp.countDocuments(filter)
+    ]);
+    
+    res.json({
+      data: rfps,
+      pagination: {
+        current: parseInt(page),
+        pages: Math.ceil(total / limit),
+        total
+      }
+    });
   } catch (err) { next(err); }
 };
 
- const getRfp = async (req, res, next) => {
+const getRfp = async (req, res, next) => {
   try {
     const { id } = req.params;
     const rfp = await Rfp.findById(id).populate("vendors", "name email contact");
@@ -38,7 +63,7 @@ const createRfp = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
- const sendRfp = async (req, res, next) => {
+const sendRfp = async (req, res, next) => {
   try {
     const { rfpId, vendorIds } = req.body;
     const rfp = await Rfp.findById(rfpId);
@@ -49,13 +74,11 @@ const createRfp = async (req, res, next) => {
     rfp.status = "Sent";
     await rfp.save();
     
-    // Try to send emails, but don't fail the entire operation if emails fail
     let emailResults = { success: 0, failed: 0, total: vendors.length };
     try {
       emailResults = await sendRfpEmailToVendors(rfp, vendors);
     } catch (emailError) {
       console.error("Email sending failed:", emailError);
-      // Continue with the operation even if emails fail
     }
     
     res.json({ 
@@ -72,19 +95,18 @@ const createRfp = async (req, res, next) => {
 
 const getVendorRfps = async (req, res, next) => {
   try {
-    // Find the vendor record linked to this user
-    const Vendor = require("../model/Vendor.model");
-    const vendor = await Vendor.findOne({ "metadata.userId": req.user.id });
+    const vendor = await Vendor.findOne({ "metadata.userId": req.user.id }).lean();
     
     if (!vendor) {
       return res.status(404).json({ message: "Vendor profile not found" });
     }
 
-    // Find RFPs that include this vendor in their vendors array
     const rfps = await Rfp.find({ 
       vendors: vendor._id,
       status: "Sent" 
-    }).populate("vendors", "name email contact");
+    })
+    .populate("vendors", "name email contact")
+    .lean();
     
     res.json(rfps);
   } catch (err) { next(err); }
@@ -100,13 +122,11 @@ const updateRfp = async (req, res, next) => {
       return res.status(404).json({ message: "RFP not found" });
     }
 
-    // Check if RFP has been sent to vendors or has proposals
     const hasActiveProposals = await require("../model/Proposal.model").exists({ rfpId: id });
     const hasVendors = rfp.vendors && rfp.vendors.length > 0;
     const isSent = rfp.status === 'Sent';
     const hasAwardedContracts = rfp.status === 'Awarded';
 
-    // Different levels of restrictions based on RFP status
     if (hasAwardedContracts) {
       return res.status(400).json({ 
         message: "Cannot edit RFP",
@@ -124,7 +144,6 @@ const updateRfp = async (req, res, next) => {
     }
 
     if (isSent || hasVendors) {
-      // Allow limited edits for sent RFPs (only title changes, no description changes)
       if (description && description !== rfp.description) {
         return res.status(400).json({ 
           message: "Cannot edit RFP description",
@@ -133,7 +152,6 @@ const updateRfp = async (req, res, next) => {
         });
       }
       
-      // Allow title change but log it for audit
       if (title && title !== rfp.title) {
         console.log(`RFP title updated: "${rfp.title}" → "${title}" (ID: ${id}) by user ${req.user?.id}`);
         rfp.title = title;
@@ -152,7 +170,6 @@ const updateRfp = async (req, res, next) => {
       });
     }
 
-    // Full editing allowed for draft RFPs
     let hasChanges = false;
     if (title && title !== rfp.title) {
       rfp.title = title;
@@ -160,7 +177,6 @@ const updateRfp = async (req, res, next) => {
     }
     if (description && description !== rfp.description) {
       rfp.description = description;
-      // Regenerate structured data when description changes
       const structured = await generateStructuredRfp(description);
       rfp.structured = structured;
       hasChanges = true;
@@ -191,13 +207,11 @@ const deleteRfp = async (req, res, next) => {
       return res.status(404).json({ message: "RFP not found" });
     }
 
-    // Comprehensive checks before allowing deletion
     const hasActiveProposals = await require("../model/Proposal.model").exists({ rfpId: id });
     const hasVendors = rfp.vendors && rfp.vendors.length > 0;
     const isSent = rfp.status === 'Sent';
     const hasAwardedContracts = rfp.status === 'Awarded';
 
-    // Prevent deletion if any of these conditions are met
     if (hasVendors || isSent || hasActiveProposals || hasAwardedContracts) {
       let reasons = [];
       if (hasVendors) reasons.push("RFP has been sent to vendors");
@@ -211,7 +225,6 @@ const deleteRfp = async (req, res, next) => {
       });
     }
 
-    // Log the deletion for audit purposes
     console.log(`RFP deleted: ${rfp.title} (ID: ${id}) by user ${req.user?.id}`);
     
     await Rfp.findByIdAndDelete(id);

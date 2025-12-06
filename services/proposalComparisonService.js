@@ -2,7 +2,6 @@ const { parseVendorResponse } = require("./aiService.js");
 
 const compareProposals = async (rfpId) => {
   try {
-    // Validate input
     if (!rfpId || rfpId === "undefined" || rfpId === "null") {
       throw new Error("Invalid RFP ID provided");
     }
@@ -11,13 +10,11 @@ const compareProposals = async (rfpId) => {
     const Rfp = require("../model/Rfp.model");
     const Vendor = require("../model/Vendor.model");
 
-    // Get RFP details
     const rfp = await Rfp.findById(rfpId);
     if (!rfp) {
       throw new Error("RFP not found");
     }
 
-    // Get all proposals for this RFP with vendor details
     const proposals = await Proposal.find({ rfp: rfpId })
       .populate("vendor", "name email contact")
       .sort({ createdAt: -1 });
@@ -37,7 +34,6 @@ const compareProposals = async (rfpId) => {
       };
     }
 
-    // Prepare comparison data
     const comparisonData = {
       rfp: {
         title: rfp.title,
@@ -62,10 +58,8 @@ const compareProposals = async (rfpId) => {
       }))
     };
 
-    // Generate AI comparison and recommendation
     const aiAnalysis = await generateAIComparison(comparisonData);
 
-    // Calculate scoring metrics
     const scoredProposals = await calculateProposalScores(comparisonData);
 
     return {
@@ -88,7 +82,6 @@ const compareProposals = async (rfpId) => {
 
 const generateAIComparison = async (comparisonData) => {
   try {
-    // Create comparison prompt for AI
     const prompt = `
 Compare the following vendor proposals for an RFP and provide a recommendation:
 
@@ -122,10 +115,8 @@ Please provide:
 Format your response as JSON with keys: summary, keyFactors, riskAnalysis, recommendation
 `;
 
-    // Use existing AI service to analyze
     const aiResponse = await parseVendorResponse(prompt, [], comparisonData.rfp.requirements);
     
-    // Parse the AI response
     let analysis = {
       summary: "AI analysis not available",
       keyFactors: ["Price", "Delivery Time", "Payment Terms", "Completeness"],
@@ -134,7 +125,6 @@ Format your response as JSON with keys: summary, keyFactors, riskAnalysis, recom
     };
 
     try {
-      // Try to parse AI response as JSON
       if (aiResponse.summary) {
         analysis.summary = aiResponse.summary;
       }
@@ -172,19 +162,15 @@ const calculateProposalScores = (comparisonData) => {
     let score = 0;
     let maxScore = 100;
 
-    // Price scoring (40% weight)
     const priceScore = proposal.totalPrice <= budget ? 40 : Math.max(0, 40 - ((proposal.totalPrice - budget) / budget) * 40);
     score += priceScore;
 
-    // Delivery scoring (25% weight)
     const deliveryScore = proposal.deliveryDays <= requiredDelivery ? 25 : Math.max(0, 25 - ((proposal.deliveryDays - requiredDelivery) / requiredDelivery) * 25);
     score += deliveryScore;
 
-    // Completeness scoring (20% weight)
     const completenessScore = (proposal.completeness / 100) * 20;
     score += completenessScore;
 
-    // Terms matching (15% weight)
     let termsScore = 15;
     if (comparisonData.rfp.paymentTerms && proposal.paymentTerms !== comparisonData.rfp.paymentTerms) {
       termsScore -= 5;
@@ -201,7 +187,7 @@ const calculateProposalScores = (comparisonData) => {
       deliveryScore: Math.round(deliveryScore),
       completenessScore: Math.round(completenessScore),
       termsScore: Math.round(termsScore),
-      rank: 0 // Will be set after sorting
+      rank: 0
     };
   }).sort((a, b) => b.calculatedScore - a.calculatedScore)
     .map((proposal, index) => ({

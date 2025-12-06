@@ -1,10 +1,16 @@
-const { openai } = require ("../Config/openai.js");
+const { openai } = require("../Config/openai.js");
+const NodeCache = require("node-cache");
 
-/**
- * generateStructuredRfp
- * Takes natural language description and returns structured JSON for RFP
- */
- const generateStructuredRfp = async (text) => {
+const aiCache = new NodeCache({ stdTTL: 3600, checkperiod: 600 });
+
+const generateStructuredRfp = async (text) => {
+  const cacheKey = `rfp_${Buffer.from(text).toString('base64').substring(0, 50)}`;
+  const cached = aiCache.get(cacheKey);
+  if (cached) {
+    console.log('AI cache hit for RFP generation');
+    return cached;
+  }
+
   const prompt = `
 You are an assistant that converts procurement requests into a JSON structure.
 Input: ${text}
@@ -28,35 +34,42 @@ Return only JSON with keys:
         { role: "user", content: prompt }
       ],
       temperature: 0.3,
+      max_tokens: 500
     });
 
     let raw = resp.choices?.[0]?.message?.content || "{}";
     
-    // Remove markdown code blocks if present
     if (raw.includes('```json')) {
       raw = raw.replace(/```json\s*/, '').replace(/```\s*$/, '');
     } else if (raw.includes('```')) {
       raw = raw.replace(/```\s*/, '').replace(/```\s*$/, '');
     }
     
-    // Clean up any extra whitespace
     raw = raw.trim();
     
     const json = JSON.parse(raw);
+    
+    aiCache.set(cacheKey, json);
+    
     return json;
   } catch (err) {
     console.error("OpenAI API error:", err);
-    // Fallback minimal parsing
-    return { budget: null, deliveryDays: null, paymentTerms: null, warranty: null, items: [] };
+    const fallback = { budget: null, deliveryDays: null, paymentTerms: null, warranty: null, items: [] };
+    
+    aiCache.set(cacheKey, fallback, 300);
+    
+    return fallback;
   }
 };
 
-/**
- * parseVendorResponse
- * Parses vendor reply (raw email body + attachments) into structured proposal data.
- * attachments param may be array of file text extractions done earlier.
- */
- const parseVendorResponse = async (rawEmailBody, attachments = [], rfpStructured = {}) => {
+const parseVendorResponse = async (rawEmailBody, attachments = [], rfpStructured = {}) => {
+  const cacheKey = `proposal_${Buffer.from(rawEmailBody + JSON.stringify(attachments)).toString('base64').substring(0, 50)}`;
+  const cached = aiCache.get(cacheKey);
+  if (cached) {
+    console.log('AI cache hit for proposal parsing');
+    return cached;
+  }
+
   let attachmentText = attachments.join("\n");
   const prompt = `You are an assistant that extracts proposal information from vendor replies.
 RFP (context): ${JSON.stringify(rfpStructured)}
@@ -86,24 +99,31 @@ Return JSON:
         { role: "user", content: prompt }
       ],
       temperature: 0.3,
+      max_tokens: 800
     });
 
     let raw = resp.choices?.[0]?.message?.content || "{}";
     
-    // Remove markdown code blocks if present
     if (raw.includes('```json')) {
       raw = raw.replace(/```json\s*/, '').replace(/```\s*$/, '');
     } else if (raw.includes('```')) {
       raw = raw.replace(/```\s*/, '').replace(/```\s*$/, '');
     }
     
-    // Clean up any extra whitespace
     raw = raw.trim();
     
-    return JSON.parse(raw);
+    const result = JSON.parse(raw);
+    
+    aiCache.set(cacheKey, result);
+    
+    return result;
   } catch (err) {
     console.error("OpenAI API error:", err);
-    return { totalPrice: null, currency: null, deliveryDays: null, warranty: null, paymentTerms: null, lineItems: [], completeness: 0, summary: "" };
+    const fallback = { totalPrice: null, currency: null, deliveryDays: null, warranty: null, paymentTerms: null, lineItems: [], completeness: 0, summary: "" };
+    
+    aiCache.set(cacheKey, fallback, 300);
+    
+    return fallback;
   }
 };
 
