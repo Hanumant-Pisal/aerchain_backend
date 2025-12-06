@@ -1,5 +1,5 @@
 const express = require("express");
-const { receiveParsedProposal, getProposalsForRfp, submitProposal, getVendorProposals, getBuyerProposals, compareRfpProposals } = require("../controllers/proposalController.js");
+const { receiveParsedProposal, submitProposal, getVendorProposals, getBuyerProposals, compareRfpProposals } = require("../controllers/proposalController.js");
 const { authMiddleware, requireRole } = require("../middlewares/authMiddleware.js");
 
 
@@ -8,8 +8,6 @@ const router = express.Router();
 // Endpoint used by IMAP worker or webhook to post parsed proposals
 router.post("/receive", receiveParsedProposal);
 
-// UI endpoints
-router.get("/rfp/:id", authMiddleware, getProposalsForRfp);
 
 // Vendor proposal submission and viewing
 router.post("/submit", authMiddleware, requireRole("vendor"), submitProposal);
