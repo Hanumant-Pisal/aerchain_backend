@@ -22,7 +22,7 @@ const getRfps = async (req, res, next) => {
     const { page = 1, limit = 20, status, search } = req.query;
     const skip = (page - 1) * limit;
     
-    const filter = {};
+    const filter = { createdBy: req.user?.id };
     if (status) filter.status = status;
     if (search) {
       filter.$or = [

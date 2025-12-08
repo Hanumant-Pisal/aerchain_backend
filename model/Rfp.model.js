@@ -9,7 +9,7 @@ const lineItemSchema = new mongoose.Schema({
 
 const rfpSchema = new mongoose.Schema({
   title: { type: String, required: true, index: true },
-  description: String, // raw NL description
+  description: String,
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
   structured: {
     budget: Number,
