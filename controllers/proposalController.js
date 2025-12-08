@@ -4,16 +4,17 @@ const Vendor = require("../model/Vendor.model");
 const { parseVendorResponse } = require("../services/aiService.js");
 const { computeScoresForProposals } = require("../utils/scoringEngine.js");
 
-
- const receiveParsedProposal = async (req, res, next) => {
+const receiveParsedProposal = async (req, res, next) => {
   try {
     const { rfpId, vendorEmail, rawEmail, attachments } = req.body;
-    const rfp = await Rfp.findById(rfpId);
+    
+    const [rfp, vendor] = await Promise.all([
+      Rfp.findById(rfpId),
+      Vendor.findOne({ email: vendorEmail })
+    ]);
+    
     if (!rfp) return res.status(404).json({ message: "RFP not found" });
 
-    const vendor = await Vendor.findOne({ email: vendorEmail });
-
-    
     const parsed = await parseVendorResponse(rawEmail, attachments, rfp.structured);
 
     const proposal = await Proposal.create({
@@ -26,16 +27,24 @@ const { computeScoresForProposals } = require("../utils/scoringEngine.js");
       aiSummary: parsed.summary 
     });
 
-   
-    await computeScoresForProposals(rfpId);
+    setImmediate(async () => {
+      try {
+        await computeScoresForProposals(rfpId);
+      } catch (error) {
+        console.error('Error computing scores:', error);
+      }
+    });
 
     res.json(proposal);
   } catch (err) { next(err); }
 };
 
- const getProposalsForRfp = async (req, res, next) => {
+const getProposalsForRfp = async (req, res, next) => {
   try {
-    const proposals = await Proposal.find({ rfp: req.params.id }).populate("vendor");
+    const proposals = await Proposal.find({ rfp: req.params.id })
+      .populate("vendor", "name email contact")
+      .sort({ createdAt: -1 })
+      .lean();
     res.json(proposals);
   } catch (err) { next(err); }
 };
@@ -124,13 +133,11 @@ const getVendorProposals = async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    // Find the vendor record linked to this user
     const vendor = await Vendor.findOne({ "metadata.userId": userId });
     if (!vendor) {
       return res.status(404).json({ message: "Vendor profile not found" });
     }
 
-    // Get all proposals from this vendor
     const proposals = await Proposal.find({ vendor: vendor._id })
       .populate("rfp", "title description createdAt")
       .sort({ createdAt: -1 });
@@ -143,11 +150,9 @@ const getBuyerProposals = async (req, res, next) => {
   try {
     const userId = req.user.id;
 
-    // Get all RFPs created by this buyer
     const rfps = await Rfp.find({ createdBy: userId }).select("_id");
     const rfpIds = rfps.map(rfp => rfp._id);
 
-    // Get all proposals for these RFPs
     const proposals = await Proposal.find({ rfp: { $in: rfpIds } })
       .populate("rfp", "title createdAt")
       .populate("vendor", "name email")
@@ -163,19 +168,16 @@ const compareRfpProposals = async (req, res, next) => {
   try {
     const { rfpId } = req.params;
     
-    // Validate rfpId
     if (!rfpId || rfpId === "undefined") {
       return res.status(400).json({ message: "RFP ID is required" });
     }
     
-    // Verify user has access to this RFP
     const Rfp = require("../model/Rfp.model");
     const rfp = await Rfp.findById(rfpId);
     if (!rfp) {
       return res.status(404).json({ message: "RFP not found" });
     }
 
-    // Check if user is the creator or admin
     const userId = req.user.id;
     const userRole = req.user.role;
     
@@ -183,7 +185,6 @@ const compareRfpProposals = async (req, res, next) => {
       return res.status(403).json({ message: "Access denied" });
     }
 
-    // Generate comparison
     const comparison = await compareProposals(rfpId);
     
     res.json(comparison);

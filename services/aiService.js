@@ -7,7 +7,6 @@ const generateStructuredRfp = async (text) => {
   const cacheKey = `rfp_${Buffer.from(text).toString('base64').substring(0, 50)}`;
   const cached = aiCache.get(cacheKey);
   if (cached) {
-    console.log('AI cache hit for RFP generation');
     return cached;
   }
 
@@ -53,7 +52,6 @@ Return only JSON with keys:
     
     return json;
   } catch (err) {
-    console.error("OpenAI API error:", err);
     const fallback = { budget: null, deliveryDays: null, paymentTerms: null, warranty: null, items: [] };
     
     aiCache.set(cacheKey, fallback, 300);
@@ -66,7 +64,6 @@ const parseVendorResponse = async (rawEmailBody, attachments = [], rfpStructured
   const cacheKey = `proposal_${Buffer.from(rawEmailBody + JSON.stringify(attachments)).toString('base64').substring(0, 50)}`;
   const cached = aiCache.get(cacheKey);
   if (cached) {
-    console.log('AI cache hit for proposal parsing');
     return cached;
   }
 
